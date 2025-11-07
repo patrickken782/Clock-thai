@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Dashboard - นาฬิกา / ราคาสินทรัพย์</title>
+
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- React + ReactDOM + Babel (no build tools) -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    html,body,#root { height:100%; }
+    body { background: linear-gradient(180deg,#0f172a,#020617); -webkit-font-smoothing:antialiased; }
+    .clock-large { font-size: clamp(2.5rem, 8vw, 6rem); line-height: 1; font-weight:700; }
+    .panel { background: rgba(15,23,42,0.55); backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,0.03); }
+    .warn { background: #fef3c7; color: #92400e; padding: .25rem .5rem; border-radius: .375rem; font-weight:600; }
+    .circle-btn { padding: .5rem; border-radius: .5rem; }
+  </style>
+</head>
+<body class="text-slate-100">
+  <div id="root" class="h-screen"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    const COLORS = { up: '#4ade80', down: '#f87171', gold: '#fbbf24' };
+    const INTERVALS = { btc: 60 * 1000, others: 5 * 60 * 1000, news: 10 * 60 * 1000 };
+    const COINGECKO_BTC_URL = 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true';
+    function yahooProxyUrl(symbols){ const raw = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + encodeURIComponent(symbols.join(',')); return 'https://api.allorigins.win/raw?url=' + encodeURIComponent(raw); }
+    const GOLDTRADERS_URL = 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://www.goldtraders.or.th/');
+    const GOOGLE_NEWS_RSS = 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://news.google.com/rss/search?q=bitcoin+OR+gold+OR+stock&hl=th&gl=TH&ceid=TH:th');
+
+    function formatThaiDate(d){
+      try { return new Intl.DateTimeFormat('th-TH', { weekday:'long', day:'numeric', month:'long', year:'numeric'}).format(d); }
+      catch(e){ return d.toLocaleDateString('th-TH'); }
+    }
+    function formatTime(d){ return d.toLocaleTimeString('th-TH', { hour12:false }); }
+    function isStale(ts, limitMs = 60 * 60 * 1000){ if(!ts) return true; return (Date.now() - ts) > limitMs; }
+
+    function TopBar({ orientation, toggleOrientation, lastUpdateMap }){
+      const staleKeys = Object.keys(lastUpdateMap || {}).filter(k => isStale(lastUpdateMap[k]));
+      return (
+        <div className="w-full flex items-start justify-between gap-2 p-2">
+          <div className="flex-grow">
+            <div className="text-sm text-slate-300">Auto-update: BTC 1m • Other 5m • News 10m</div>
+          </div>
+          <div className="flex items-center gap-2">
+            {staleKeys.length > 0 && <div className="warn text-xs hidden md:inline">ข้อมูลบางอย่างเก่าเกิน 1 ชั่วโมง</div>}
+            <button title="สลับโหมด Portrait / Landscape" onClick={toggleOrientation} className="circle-btn panel p-2 hover:scale-105 transition-transform">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-slate-200">
+                <rect x="3" y="3" width="18" height="18" rx="2" strokeWidth="1.5" />
+                {orientation === 'portrait' ? (<path d="M8 7h8" strokeWidth="1.5" />) : (<path d="M7 8v8" strokeWidth="1.5" />)}
+              </svg>
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    function Clock({ now }){
+      return (
+        <div className="p-3">
+          <div className="clock-large text-white">{formatTime(now)}</div>
+          <div className="text-slate-300 mt-1 text-sm">{formatThaiDate(now)}</div>
+        </div>
+      );
+    }
+
+    function Horoscope({ horoscope }){
+      return (
+        <div className="panel p-3 rounded-md">
+          <div className="flex items-center gap-2">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" className="text-amber-400"><path d="M12 2v6M12 16v6M4 8l4 8M20 8l-4 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            <div>
+              <div className="text-sm text-amber-300 font-semibold">ดวงรายวัน (การเงิน/การลงทุน)</div>
+              <div className="text-xs text-slate-300">อัพเดททุกวัน — ข้อความสุ่ม</div>
+            </div>
+          </div>
+          <div className="mt-3 text-sm text-slate-100" style={{ color: COLORS.gold }}>
+            {horoscope || 'กำลังโหลดคำทำนาย...'}
+          </div>
+        </div>
+      );
+    }
+
+    function AssetCard({ title, price, changePct, currency, lastUpdated }){
+      const up = changePct !== null && changePct >= 0;
+      return (
+        <div className="panel p-4 rounded-md h-full flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-slate-300">{title}</div>
+              <div className="text-xs text-slate-400">{ lastUpdated ? new Date(lastUpdated).toLocaleTimeString('th-TH',{hour12:false}) : '' }</div>
+            </div>
+            <div className="mt-3">
+              <div className="text-2xl font-bold" style={{ color: changePct === null ? undefined : (up ? COLORS.up : COLORS.down) }}>
+                { price !== null ? (currency ? `${currency} ${price}` : price) : '---' }
+              </div>
+              <div className="text-sm mt-1">
+                { changePct !== null ? (
+                  <span className="inline-flex items-center gap-2">
+                    <span style={{ color: up ? COLORS.up : COLORS.down, fontWeight:700 }}>{up ? '▲' : '▼'} {Math.abs(changePct).toFixed(2)}%</span>
+                  </span>
+                ) : <span className="text-slate-400">ไม่มีข้อมูล</span> }
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function CustomTickers({ tickers, onAdd, onRemove, onRefreshRequest }){
+      const [symbol, setSymbol] = useState('');
+      return (
+        <div className="panel p-3 rounded-md">
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-semibold">Custom Tickers</div>
+            <div className="text-xs text-slate-400">เพิ่ม/ลบได้</div>
+          </div>
+          <div className="mt-3 space-y-2">
+            <div className="flex gap-2">
+              <input className="flex-grow bg-transparent border border-slate-700 px-3 py-2 rounded text-sm" placeholder="เช่น AAPL หรือ TSLA" value={symbol} onChange={e=>setSymbol(e.target.value.toUpperCase().trim())} />
+              <button className="bg-slate-700 px-3 py-2 rounded text-sm" onClick={()=>{
+                if(symbol) { onAdd(symbol); setSymbol(''); }
+              }}>เพิ่ม</button>
+              <button className="bg-slate-700 px-3 py-2 rounded text-sm" onClick={onRefreshRequest}>รีเฟรช</button>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2">
+              {tickers.length === 0 && <div className="text-sm text-slate-400">ยังไม่มี ticker ที่เพิ่ม</div>}
+              {tickers.map(t => (
+                <div key={t.symbol} className="flex items-center justify-between bg-slate-800 p-2 rounded">
+                  <div>
+                    <div className="text-sm font-semibold">{t.symbol}</div>
+                    <div className="text-xs text-slate-400">{ t.price !== null ? `${t.currency || ''} ${t.price}` : 'ไม่มีข้อมูล' } {t.changePct !== null ? (<span style={{ color: t.changePct>=0 ? COLORS.up : COLORS.down, marginLeft:8 }}>{t.changePct>=0 ? '▲' : '▼'} {Math.abs(t.changePct).toFixed(2)}%</span>) : null}</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button title="ลบ" className="text-xs px-2 py-1 bg-red-600/80 rounded" onClick={()=>onRemove(t.symbol)}>ลบ</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function NewsList({ news }){
+      return (
+        <div className="panel p-3 rounded-md h-full overflow-auto">
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-semibold">ข่าวสั้น (เกี่ยวกับ Bitcoin / ทอง / หุ้น)</div>
+            <div className="text-xs text-slate-400">อัปเดต</div>
+          </div>
+          <div className="mt-3 space-y-3">
+            {news.length === 0 && <div className="text-sm text-slate-400">ยังไม่มีข่าว</div>}
+            {news.slice(0,5).map((n, i) => (
+              <div key={i} className="text-sm">
+                <div className="flex items-center justify-between">
+                  <a className="text-slate-200 hover:underline" href={n.link} target="_blank" rel="noreferrer">{n.title}</a>
+                  <div className="text-xs text-slate-400 ml-2">{n.time ? n.time : ''}</div>
+                </div>
+                {n.source && <div className="text-xs text-slate-400">{n.source}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    function Footer({ lastUpdateMap }){
+      const fmt = (ts) => ts ? new Date(ts).toLocaleTimeString('th-TH',{hour12:false}) : '-';
+      return (
+        <div className="text-xs text-slate-400 mt-3">
+          <div className="flex items-center justify-between">
+            <div>ล่าสุด: BTC {fmt(lastUpdateMap?.bitcoin)} • S&P500 {fmt(lastUpdateMap?.sp500)} • ทองUSD {fmt(lastUpdateMap?.goldUSD)} • ทองไทย {fmt(lastUpdateMap?.goldTH)}</div>
+            <div className="text-slate-500">ออกแบบให้ทำงานบนมือถือเก่า</div>
+          </div>
+        </div>
+      );
+    }
+
+    function App(){
+      const [now, setNow] = useState(new Date());
+      useEffect(() => { const id = setInterval(()=>setNow(new Date()), 1000); return ()=>clearInterval(id); }, []);
+      const [orientation, setOrientation] = useState(localStorage.getItem('orientation') || 'portrait');
+      useEffect(()=> localStorage.setItem('orientation', orientation), [orientation]);
+      const toggleOrientation = ()=> setOrientation(o=> o === 'portrait' ? 'landscape' : 'portrait');
+
+      const HOROSCOPES = [
+        "วันนี้โอกาสได้ยินข่าวดีเกี่ยวกับการลงทุน — อย่าลงทุนเกินแผน",
+        "การเงินต้องระวังสภาพคล่อง หากมีข้อเสนอให้รอดูสัญญาณตลาดก่อนตัดสินใจ",
+        "ตลาดผันผวนเหมาะกับการถือยาว ไม่ควรเทรดเก็งกำไรหนักในวันนี้",
+        "มีโอกาสพบจังหวะซื้อหุ้นหรือตราสารที่คิดว่ายังถูกกว่าค่าความเป็นจริง",
+        "ติดตาม Bitcoin หากมีปริมาณซื้อเพิ่มขึ้น มีโอกาสเห็นรีบาวด์เล็กๆ",
+        "ทองคำมีแนวโน้มเป็นสินทรัพย์ป้องกันความเสี่ยง ทุกการเข้าระวังสภาพคล่อง",
+        "แบ่งสัดส่วนการลงทุน ลดความเสี่ยง อย่าพนันหมดหน้าตัก",
+        "หากต้องลงทุนระยะสั้น ให้ตั้งจุดตัดขาดทุนที่ชัดเจน"
+      ];
+      const [horoscope, setHoroscope] = useState('');
+      useEffect(()=>{
+        const todayKey = 'horoscope_' + new Date().toISOString().slice(0,10);
+        const existing = localStorage.getItem(todayKey);
+        if(existing){ setHoroscope(existing); }
+        else {
+          const pick = HOROSCOPES[Math.floor(Math.random()*HOROSCOPES.length)];
+          localStorage.setItem(todayKey, pick);
+          setHoroscope(pick);
+        }
+      }, []);
+
+      const [lastUpdateMap, setLastUpdateMap] = useState({ bitcoin: null, sp500: null, goldUSD: null, goldTH: null, custom: null });
+      const updateLast = (key, ts) => setLastUpdateMap(m => ({...m, [key]: ts}));
+      const [errors, setErrors] = useState({}); // keys: bitcoin, yahoo, goldTH, news
+
+      const [bitcoin, setBitcoin] = useState({ price: null, changePct: null });
+      const [sp500, setSp500] = useState({ price: null, changePct: null });
+      const [goldUSD, setGoldUSD] = useState({ price: null, changePct: null });
+      const [goldTH, setGoldTH] = useState({ price: null });
+
+      const [customTickers, setCustomTickers] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('customTickers') || '[]'); } catch(e){ return []; }
+      });
+      useEffect(()=> localStorage.setItem('customTickers', JSON.stringify(customTickers)), [customTickers]);
+
+      const [news, setNews] = useState([]);
+
+      async function fetchBTC(){
+        try{
+          const res = await fetch(COINGECKO_BTC_URL);
+          if(!res.ok) throw new Error(res.statusText);
+          const data = await res.json();
+          const usd = data?.bitcoin?.usd ?? null;
+          const ch = data?.bitcoin?.usd_24h_change ?? null;
+          setBitcoin({ price: usd !== null ? usd.toLocaleString('en-US', {maximumFractionDigits:2}) : null, changePct: ch !== null ? ch : null });
+          updateLast('bitcoin', Date.now());
+          setErrors(e => ({...e, bitcoin: null}));
+        } catch(err){
+          setErrors(e => ({...e, bitcoin: (err.message || 'fetch error')}));
+          // per request: if API cannot load, do not display -> handled in render
+        }
+      }
+
+      async function fetchYahooSymbols(symbols, onResult){
+        try{
+          const url = yahooProxyUrl(symbols);
+          const res = await fetch(url);
+          if(!res.ok) throw new Error(res.statusText);
+          const json = await res.json();
+          const quotes = (json?.quoteResponse?.result) || [];
+          const map = {};
+          quotes.forEach(q => {
+            map[q.symbol] = {
+              price: q.regularMarketPrice ?? null,
+              changePct: q.regularMarketChangePercent ?? null,
+              currency: q.currency ?? ''
+            };
+          });
+          if(onResult) onResult(map);
+          setErrors(e => ({...e, yahoo: null}));
+        } catch(err){
+          setErrors(e => ({...e, yahoo: err.message || 'yahoo error'}));
+        }
+      }
+
+      async function fetchSPandGoldUSD(){
+        await fetchYahooSymbols(['^GSPC','GC=F'], (map)=>{
+          if(map['^GSPC']){
+            setSp500({ price: map['^GSPC'].price !== null ? map['^GSPC'].price.toLocaleString('en-US',{maximumFractionDigits:2}) : null, changePct: map['^GSPC'].changePct ?? null });
+            updateLast('sp500', Date.now());
+          }
+          if(map['GC=F']){
+            setGoldUSD({ price: map['GC=F'].price !== null ? map['GC=F'].price.toLocaleString('en-US',{maximumFractionDigits:2}) : null, changePct: map['GC=F'].changePct ?? null });
+            updateLast('goldUSD', Date.now());
+          }
+        });
+      }
+
+      async function fetchThaiGold(){
+        try{
+          const res = await fetch(GOLDTRADERS_URL);
+          if(!res.ok) throw new Error(res.statusText);
+          const text = await res.text();
+          let found = null;
+          const reNum = /(\d{1,3}(?:,\d{3})?(?:\.\d+)?)/g;
+          const reBaht = /([\d,]+\.\d+)\s*บาท|([\d,]+)\s*บาท/;
+          const m = text.match(reBaht);
+          if(m){ const n = m[1]||m[2]; found = n.replace(/,/g,''); }
+          else {
+            const all = text.match(reNum);
+            if(all && all.length) found = all[0].replace(/,/g,'');
+          }
+          if(found){
+            setGoldTH({ price: Number(found).toLocaleString('th-TH') });
+            updateLast('goldTH', Date.now());
+            setErrors(e => ({...e, goldTH: null}));
+          } else {
+            throw new Error('ไม่พบข้อมูลในหน้า goldtraders');
+          }
+        } catch(err){
+          setErrors(e => ({...e, goldTH: err.message || 'goldtraders error'}));
+        }
+      }
+
+      async function fetchCustomTickers(){
+        if(customTickers.length === 0) return;
+        const symbols = customTickers.map(t => t.symbol);
+        await fetchYahooSymbols(symbols, (map)=>{
+          setCustomTickers(prev => prev.map(t => {
+            const d = map[t.symbol];
+            if(d){
+              return { ...t, price: d.price !== null ? Number(d.price).toLocaleString('en-US',{maximumFractionDigits:2}) : null, changePct: d.changePct ?? null, currency: d.currency || '' };
+            } else {
+              return { ...t, price: null, changePct: null };
+            }
+          }));
+          updateLast('custom', Date.now());
+        });
+      }
+
+      async function fetchNews(){
+        try{
+          const res = await fetch(GOOGLE_NEWS_RSS);
+          if(!res.ok) throw new Error(res.statusText);
+          const text = await res.text();
+          const parser = new DOMParser();
+          const xml = parser.parseFromString(text, 'application/xml');
+          const items = Array.from(xml.querySelectorAll('item')).slice(0,8).map(i => {
+            const title = i.querySelector('title')?.textContent || '';
+            const link = i.querySelector('link')?.textContent || '';
+            const source = i.querySelector('source')?.textContent || '';
+            const pub = i.querySelector('pubDate')?.textContent || '';
+            return { title, link, source, time: pub };
+          });
+          setNews(items);
+          setErrors(e => ({...e, news: null}));
+        } catch(err){
+          setErrors(e => ({...e, news: err.message || 'news error'}));
+        }
+      }
+
+      useEffect(()=>{
+        fetchBTC();
+        fetchSPandGoldUSD();
+        fetchThaiGold();
+        fetchCustomTickers();
+        fetchNews();
+
+        const btcId = setInterval(fetchBTC, INTERVALS.btc);
+        const otherId = setInterval(()=>{ fetchSPandGoldUSD(); fetchThaiGold(); fetchCustomTickers(); }, INTERVALS.others);
+        const newsId = setInterval(fetchNews, INTERVALS.news);
+
+        return ()=>{ clearInterval(btcId); clearInterval(otherId); clearInterval(newsId); };
+      }, []); // eslint-disable-line
+
+      const addTicker = (symbol) => {
+        if(customTickers.some(t=>t.symbol === symbol)) return;
+        const newT = { symbol, price: null, changePct: null, currency: '' };
+        setCustomTickers(prev => [...prev, newT]);
+        fetchYahooSymbols([symbol], (map)=>{
+          const d = map[symbol];
+          setCustomTickers(prev => prev.map(t => t.symbol===symbol ? ({...t, price: d?.price !== null ? Number(d.price).toLocaleString('en-US',{maximumFractionDigits:2}) : null, changePct: d?.changePct ?? null, currency: d?.currency||''}) : t));
+        });
+      };
+      const removeTicker = (symbol) => setCustomTickers(prev => prev.filter(t=>t.symbol !== symbol));
+      const refreshCustom = ()=> fetchCustomTickers();
+
+      useEffect(()=>{ document.documentElement.style.setProperty('--up', COLORS.up); document.documentElement.style.setProperty('--down', COLORS.down); },[]);
+
+      const isPortrait = orientation === 'portrait';
+
+      return (
+        <div className={"max-w-screen h-full p-3 md:p-6 mx-auto flex flex-col gap-3"}>
+          <div className="w-full">
+            <TopBar orientation={orientation} toggleOrientation={toggleOrientation} lastUpdateMap={lastUpdateMap} />
+          </div>
+
+          <div className={`flex gap-3 ${isPortrait ? 'flex-col' : 'flex-row' } flex-1`}>
+            {isPortrait ? (
+              <div className="flex flex-col gap-3 w-full">
+                <div className="panel p-3 rounded-md">
+                  <div className="md:flex md:items-center md:justify-between">
+                    <div className="md:flex md:items-center md:gap-4">
+                      <Clock now={now} />
+                      <div className="hidden md:block md:w-px h-16 bg-slate-700/40 mx-3"></div>
+                      <div className="md:flex-1">
+                        <Horoscope horoscope={horoscope} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Bitcoin: show only if API loaded successfully and we have a price */}
+                  { !errors.bitcoin && bitcoin.price !== null && (
+                    <div className="col-span-2 md:col-span-1">
+                      <AssetCard title="Bitcoin (USD)" price={bitcoin.price} changePct={bitcoin.changePct} currency="USD" lastUpdated={lastUpdateMap.bitcoin} />
+                    </div>
+                  ) }
+
+                  {/* Yahoo-dependent assets: show only if yahoo API loaded */}
+                  { !errors.yahoo && goldUSD.price !== null && (
+                    <div>
+                      <AssetCard title="ทองคำ (USD/oz)" price={goldUSD.price} changePct={goldUSD.changePct} currency="USD" lastUpdated={lastUpdateMap.goldUSD} />
+                    </div>
+                  ) }
+
+                  { !errors.yahoo && sp500.price !== null && (
+                    <div>
+                      <AssetCard title="S&P 500" price={sp500.price} changePct={sp500.changePct} lastUpdated={lastUpdateMap.sp500} />
+                    </div>
+                  ) }
+                </div>
+
+                {/* Custom tickers: hide if yahoo failed */}
+                { (!errors.yahoo) && (
+                  <div>
+                    <CustomTickers tickers={customTickers} onAdd={addTicker} onRemove={removeTicker} onRefreshRequest={refreshCustom} />
+                  </div>
+                ) }
+
+                {/* News: show only if fetched successfully */}
+                { (!errors.news && news.length > 0) && (
+                  <div>
+                    <NewsList news={news} />
+                  </div>
+                ) }
+
+                <Footer lastUpdateMap={lastUpdateMap} />
+              </div>
+            ) : (
+              <>
+                <div className="w-1/3 flex flex-col gap-3">
+                  <div className="panel p-3 rounded-md"><Clock now={now} /></div>
+                  <Horoscope horoscope={horoscope} />
+                  { !errors.bitcoin && bitcoin.price !== null && <AssetCard title="Bitcoin (USD)" price={bitcoin.price} changePct={bitcoin.changePct} currency="USD" lastUpdated={lastUpdateMap.bitcoin} /> }
+                  { !errors.yahoo && goldUSD.price !== null && <AssetCard title="ทองคำ (USD/oz)" price={goldUSD.price} changePct={goldUSD.changePct} currency="USD" lastUpdated={lastUpdateMap.goldUSD} /> }
+                </div>
+
+                <div className="w-1/3 flex flex-col gap-3">
+                  { !errors.yahoo && sp500.price !== null && <AssetCard title="S&P 500" price={sp500.price} changePct={sp500.changePct} lastUpdated={lastUpdateMap.sp500} /> }
+
+                  { !errors.goldTH && goldTH.price !== null && (
+                    <div className="panel p-3 rounded-md">
+                      <div className="text-sm font-semibold">ทองคำไทย (จาก goldtraders.or.th)</div>
+                      <div className="mt-3">
+                        <div className="text-2xl font-bold" style={{ color: COLORS.gold }}>{ goldTH.price ? `${goldTH.price} บาท` : '---' }</div>
+                      </div>
+                    </div>
+                  ) }
+
+                  { (!errors.yahoo) && <CustomTickers tickers={customTickers} onAdd={addTicker} onRemove={removeTicker} onRefreshRequest={refreshCustom} /> }
+                </div>
+
+                <div className="w-1/3 flex flex-col gap-3">
+                  { (!errors.news && news.length > 0) ? <NewsList news={news} /> : (
+                    <div className="panel p-3 rounded-md">
+                      <div className="text-sm text-slate-400">ข่าว: ไม่สามารถโหลด (ซ่อน)</div>
+                    </div>
+                  ) }
+
+                  <div className="panel p-3 rounded-md">
+                    <div className="text-sm font-medium">สถานะ API</div>
+                    <div className="mt-2 text-xs text-slate-300 space-y-1">
+                      <div>CoinGecko (BTC): { lastUpdateMap.bitcoin ? new Date(lastUpdateMap.bitcoin).toLocaleTimeString('th-TH',{hour12:false}) : 'ยังไม่โหลด' } { errors.bitcoin ? <span className="text-yellow-300">• ถูกซ่อน</span> : null }</div>
+                      <div>Yahoo (S&P / Gold / Stocks): { lastUpdateMap.sp500 ? new Date(lastUpdateMap.sp500).toLocaleTimeString('th-TH',{hour12:false}) : 'ยังไม่โหลด' } { errors.yahoo ? <span className="text-yellow-300">• ถูกซ่อน</span> : null }</div>
+                      <div>GoldTraders (ไทย): { lastUpdateMap.goldTH ? new Date(lastUpdateMap.goldTH).toLocaleTimeString('th-TH',{hour12:false}) : 'ยังไม่โหลด' } { errors.goldTH ? <span className="text-yellow-300">• ถูกซ่อน</span> : null }</div>
+                      <div>News: { news.length > 0 ? `${news.length} รายการ` : 'ยังไม่โหลด' } { errors.news ? <span className="text-yellow-300">• ถูกซ่อน</span> : null }</div>
+                    </div>
+                  </div>
+
+                  <Footer lastUpdateMap={lastUpdateMap} />
+                </div>
+              </>
+            )}
+          </div>
+
+          { (isStale(lastUpdateMap.bitcoin) || isStale(lastUpdateMap.sp500) || isStale(lastUpdateMap.goldUSD) || isStale(lastUpdateMap.goldTH)) && (
+            <div className="mt-2 warn">ข้อมูลบางรายการอาจเก่าเกิน 1 ชั่วโมง — ตรวจสอบการเชื่อมต่อ API หรือรีเฟรชหน้าจอ</div>
+          ) }
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
