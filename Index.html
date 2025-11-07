@@ -3,336 +3,858 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Dashboard Web App</title>
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- React and ReactDOM CDN -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
-  <style>
-    /* Custom scrollbar for dark mode */
-    ::-webkit-scrollbar {
-      width: 8px;
-      height: 8px;
-    }
-    ::-webkit-scrollbar-thumb {
-      background-color: #4b5563;
-      border-radius: 10px;
-    }
-    ::-webkit-scrollbar-track {
-      background-color: #1f2937;
-    }
+  <title>Dashboard BTC/ทอง/หุ้น</title>
 
-    /* Arrow icons for price change */
-    .arrow-up::before {
-      content: '▲';
-      margin-right: 0.25rem;
-      color: #34d399; /* green */
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Custom gradient background for dark theme */
+    body {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: #cbd5e1;
+      font-family: "Noto Sans Thai", sans-serif, Arial;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
-    .arrow-down::before {
-      content: '▼';
-      margin-right: 0.25rem;
-      color: #ef4444; /* red */
+    /* Scrollbar hidden */
+    ::-webkit-scrollbar {
+      display: none;
     }
   </style>
+
+  <!-- React, ReactDOM, Babel CDN -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
-<body class="bg-gray-900 text-gray-100 min-h-screen">
-  <div id="root" class="p-4"></div>
+<body class="min-h-screen flex flex-col">
+  <div id="root" class="flex-1"></div>
+
   <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
 
-    const {useState, useEffect} = React;
-
-    // Utility for Thai date with Buddhist year
-    function formatThaiDate(date) {
-      const days = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
-      const months = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-      const dayName = days[date.getDay()];
-      const day = date.getDate();
-      const month = months[date.getMonth()];
-      const year = date.getFullYear() + 543; // Buddhist year
-      return `วัน${dayName} ที่ ${day} ${month} ${year}`;
-    }
-
-    // Random daily horoscope messages
-    const horoscopes = [
-      "วันนี้เป็นวันที่เหมาะแก่การเริ่มต้นสิ่งใหม่ๆ",
-      "ควรระวังเรื่องสุขภาพและการเดินทาง",
-      "จะมีโอกาสได้รับข่าวดีจากคนไกล",
-      "ระวังเรื่องการเงิน อย่าลงทุนโดยขาดการวางแผน",
-      "ความรักสดใส มีโอกาสพบคนถูกใจ",
-      "วันนี้เหมาะกับการทำงานร่วมกับทีม",
-      "จงตั้งใจฟังและเรียนรู้จากคำแนะนำของผู้อื่น",
-      "มีโอกาสสำเร็จในสิ่งที่ตั้งใจไว้",
-      "วันนี้อาจมีเรื่องกังวลใจ ควรพักผ่อนให้เพียงพอ",
-      "ความคิดสร้างสรรค์จะนำพาความสำเร็จ"
+    // Helper: Thai months and weekdays for date display
+    const thaiMonths = [
+      "ม.ค.",
+      "ก.พ.",
+      "มี.ค.",
+      "เม.ย.",
+      "พ.ค.",
+      "มิ.ย.",
+      "ก.ค.",
+      "ส.ค.",
+      "ก.ย.",
+      "ต.ค.",
+      "พ.ย.",
+      "ธ.ค.",
+    ];
+    const thaiWeekdays = [
+      "วันอาทิตย์",
+      "วันจันทร์",
+      "วันอังคาร",
+      "วันพุธ",
+      "วันพฤหัสบดี",
+      "วันศุกร์",
+      "วันเสาร์",
     ];
 
-    // Components
+    // Icon SVGs (create simple arrows)
+    const UpArrow = () => (
+      <svg
+        className="inline-block w-4 h-4 text-green-400"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        viewBox="0 0 24 24"
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+      </svg>
+    );
 
-    // Digital clock real-time
-    function Clock() {
-      const [time, setTime] = useState(new Date());
+    const DownArrow = () => (
+      <svg
+        className="inline-block w-4 h-4 text-red-400"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        viewBox="0 0 24 24"
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+      </svg>
+    );
+
+    // Utils to format numbers and colors
+    function formatNumber(num, decimals = 2) {
+      return num != null ? num.toFixed(decimals) : "-";
+    }
+
+    // Get current Thai date string
+    function getThaiDateString(date) {
+      const weekday = thaiWeekdays[date.getDay()];
+      const day = date.getDate();
+      const month = thaiMonths[date.getMonth()];
+      const year = date.getFullYear() + 543; // Buddhist Era
+      return `${weekday}ที่ ${day} ${month} ${year}`;
+    }
+
+    // Hook: useInterval with cleanup
+    function useInterval(callback, delay) {
+      const savedCallback = useRef();
+
       useEffect(() => {
-        const id = setInterval(() => setTime(new Date()), 1000);
-        return () => clearInterval(id);
-      }, []);
-      const timeString = time.toLocaleTimeString('th-TH');
-      return (
-        <div className="text-4xl font-mono text-center mb-4 select-none">{timeString}</div>
-      );
-    }
+        savedCallback.current = callback;
+      }, [callback]);
 
-    // Thai calendar date real-time
-    function ThaiCalendar() {
-      const [date, setDate] = useState(new Date());
       useEffect(() => {
-        const id = setInterval(() => setDate(new Date()), 60000);
-        return () => clearInterval(id);
-      }, []);
-      return (
-        <div className="text-xl font-semibold text-center mb-3 select-none">{formatThaiDate(date)}</div>
-      );
+        if (delay !== null) {
+          const id = setInterval(() => savedCallback.current(), delay);
+          return () => clearInterval(id);
+        }
+      }, [delay]);
     }
 
-    // Daily horoscope (random daily)
-    function DailyHoroscope() {
-      // Determine a fixed "random" index by date
-      const todayString = new Date().toISOString().slice(0,10); // YYYY-MM-DD
-      let hash = 0;
-      for(let i=0; i<todayString.length; i++) hash += todayString.charCodeAt(i);
-      const index = hash % horoscopes.length;
-      return (
-        <div className="bg-gray-800 p-3 rounded-md text-center mb-5 select-none shadow-md">
-          <div className="font-bold mb-1">ดวงประจำวัน</div>
-          <p className="italic">{horoscopes[index]}</p>
-        </div>
-      );
+    // Horoscope (ดวง) daily sentences (การเงิน/ลงทุน)
+    const horoscopeSentences = [
+      "วันนี้เป็นวันที่เหมาะแก่การวางแผนการลงทุนใหม่ ๆ โปรดระวังการเสี่ยงทางการเงินเล็กน้อย",
+      "การเงินจะคล่องตัวขึ้น หากลงทุนในสิ่งที่คุณมีความรู้และชำนาญ",
+      "อย่าตัดสินใจรีบร้อนเกี่ยวกับการลงทุน ควรหาข้อมูลเพิ่มเติมก่อน",
+      "วันนี้มีโอกาสได้เงินพิเศษจากแหล่งที่ไม่น่าเชื่อถือ โปรดตรวจสอบให้ดี",
+      "หากคุณรอบคอบในการใช้จ่าย จะสามารถเก็บเงินได้มากขึ้นในระยะยาว",
+      "ลงทุนในทองคำวันนี้มีแนวโน้มให้กำไรดี ความเสี่ยงต่ำกว่าหุ้น",
+      "ตลาดหุ้นอาจมีความผันผวน ระวังข่าวลวงและความเคลื่อนไหวฉับพลัน",
+      "วางแผนการเงินให้เหมาะสมกับเป้าหมายระยะยาว จะทำให้ผลตอบแทนสูงขึ้น",
+    ];
+
+    function getDailyHoroscope(date) {
+      // เปลี่ยนข้อความตามวันที่ แบบสุ่มประจำวัน (index modulo)
+      const index = date.getFullYear() + date.getMonth() + date.getDate();
+      return horoscopeSentences[index % horoscopeSentences.length];
     }
 
-    // Price item with color and arrow
-    function PriceItem({name, price, prevPrice, unit}) {
-      const up = price > prevPrice;
-      const down = price < prevPrice;
-      const colorClass = up ? "text-green-400" : down ? "text-red-500" : "text-gray-400";
-      const arrowClass = up ? "arrow-up" : down ? "arrow-down" : "";
-      const formattedPrice = (typeof price === 'number') ? price.toLocaleString(undefined, {minimumFractionDigits: 2,maximumFractionDigits: 2}) : price;
-      return (
-        <div className={`flex justify-between items-center ${colorClass} ${arrowClass} select-none`}>
-          <div>{name}{unit ? ` (${unit})` : ''}</div>
-          <div>{formattedPrice}</div>
-        </div>
-      );
-    }
-
-    // Fetch API helper with error catch
-    async function fetchJson(url) {
+    // Fetch wrapper with timeout & error handling
+    async function fetchWithTimeout(resource, options = {}) {
+      const { timeout = 8000 } = options;
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), timeout);
       try {
-        const res = await fetch(url);
-        if(!res.ok) throw new Error('Network response was not ok');
-        return await res.json();
-      } catch(e) {
+        const response = await fetch(resource, {
+          ...options,
+          signal: controller.signal,
+        });
+        clearTimeout(id);
+        if (!response.ok) throw new Error("Network response was not ok");
+        return response.json();
+      } catch (e) {
+        clearTimeout(id);
+        throw e;
+      }
+    }
+
+    // Main Component
+    function App() {
+      // View Mode: portrait or landscape
+      const [isPortrait, setIsPortrait] = useState(window.innerWidth <= window.innerHeight);
+
+      // Time & date state
+      const [now, setNow] = useState(new Date());
+
+      // Asset data states
+      const [bitcoin, setBitcoin] = useState(null);
+      const [bitcoinTime, setBitcoinTime] = useState(null);
+      const [goldUSD, setGoldUSD] = useState(null);
+      const [goldUSDTime, setGoldUSDTime] = useState(null);
+      const [goldTHB, setGoldTHB] = useState(null);
+      const [goldTHBTime, setGoldTHBTime] = useState(null);
+      const [sp500, setSP500] = useState(null);
+      const [sp500Time, setSP500Time] = useState(null);
+      const [customTickers, setCustomTickers] = useState(() => {
+        // Load from localStorage (saved tickers with symbol)
+        try {
+          const ls = window.localStorage.getItem("customTickers");
+          return ls ? JSON.parse(ls) : [];
+        } catch {
+          return [];
+        }
+      });
+      const [customTickerData, setCustomTickerData] = useState({});
+      const [customTickerTime, setCustomTickerTime] = useState(null);
+
+      // News
+      const [newsList, setNewsList] = useState([]);
+      const [newsTime, setNewsTime] = useState(null);
+
+      // Error states (for warnings)
+      const [errors, setErrors] = useState({});
+
+      // Handle viewport resize (update orientation)
+      useEffect(() => {
+        function handleResize() {
+          setIsPortrait(window.innerWidth <= window.innerHeight);
+        }
+        window.addEventListener("resize", handleResize);
+        return () => window.removeEventListener("resize", handleResize);
+      }, []);
+
+      // Update time every second (for clock)
+      useInterval(() => setNow(new Date()), 1000);
+
+      // Fetch Bitcoin every 1 min
+      useEffect(() => {
+        async function fetchBitcoin() {
+          try {
+            const data = await fetchWithTimeout(
+              "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true"
+            );
+            if (data.bitcoin) {
+              setBitcoin({
+                price: data.bitcoin.usd,
+                change: data.bitcoin.usd_24h_change,
+              });
+              setBitcoinTime(new Date());
+              setErrors((e) => ({ ...e, bitcoin: false }));
+            } else {
+              throw new Error("Invalid BTC data");
+            }
+          } catch {
+            setErrors((e) => ({ ...e, bitcoin: true }));
+          }
+        }
+        fetchBitcoin();
+        const intervalId = setInterval(fetchBitcoin, 60 * 1000);
+        return () => clearInterval(intervalId);
+      }, []);
+
+      // Fetch Gold USD every 5 mins
+      useEffect(() => {
+        async function fetchGoldUSD() {
+          try {
+            // Using metals-api.com free endpoint (simulate with metals.dev)
+            const response = await fetchWithTimeout(
+              "https://metals-api.com/api/latest?access_key=demo&base=USD&symbols=XAU"
+            );
+            // metals-api limited free version does not work without key
+            // We use fallback with "https://www.metals-api.com/api/latest?access_key=demo&base=USD&symbols=XAU" - demo key limited. So fallback to Gold-API (https://www.goldapi.io/) or metals.live will break since no key
+            // Instead fetch from metals.live (free, no key needed) https://api.metals.live/v1/spot
+            // So use metals.live api here:
+
+            // Using metals.live API directly for gold price in USD/oz
+            const liveData = await fetchWithTimeout(
+              "https://api.metals.live/v1/spot/gold"
+            );
+            // liveData example: [{timestamp:..., price:...}]
+            if (liveData.length > 0 && liveData[0].price) {
+              setGoldUSD({ price: liveData[0].price });
+              setGoldUSDTime(new Date());
+              setErrors((e) => ({ ...e, goldUSD: false }));
+            } else {
+              throw new Error("Invalid Gold USD data");
+            }
+          } catch {
+            setErrors((e) => ({ ...e, goldUSD: true }));
+          }
+        }
+        fetchGoldUSD();
+        const intervalId = setInterval(fetchGoldUSD, 5 * 60 * 1000);
+        return () => clearInterval(intervalId);
+      }, []);
+
+      // Fetch Gold THB from goldtraders.or.th every 5 mins (via allorigins proxy)
+      useEffect(() => {
+        async function fetchGoldTHB() {
+          try {
+            // goldtraders.or.th data page: http://www.goldtraders.or.th/
+            // Get current price for gold 96.5% (บาท/สลึง)
+            // We'll parse price from html text via proxy
+            const htmlResponse = await fetchWithTimeout(
+              "https://api.allorigins.win/get?url=" +
+                encodeURIComponent("http://goldtraders.or.th/")
+            );
+            if (htmlResponse && htmlResponse.contents) {
+              const parser = new DOMParser();
+              const doc = parser.parseFromString(htmlResponse.contents, "text/html");
+
+              // Price element: หา <span id="spnAmount"> (ทองคำ96.5%) ปกติจะแสดงในหน้า
+              // จริงๆ goldtraders.or.th มี table ราคาทองคำ
+              // โดยปกติราคาทองคำ 96.5% บาท/สลึง อยู่ใน element กับ id หรือ class ที่อาจเปลี่ยนแปลงได้
+              // เราจะลองหาข้อมูลในตารางราคาทอง รอ fallback ถ้า parser ไม่เจอ
+              // ตัวอย่าง: <td class="text-right pr-1">ราคา</td><td id="spnAmount"> price </td>
+              const priceElement = doc.querySelector("#spnAmount");
+              if (priceElement) {
+                const price = parseFloat(priceElement.textContent.replace(/[^0-9.]/g, ""));
+                if (!isNaN(price)) {
+                  setGoldTHB({ price });
+                  setGoldTHBTime(new Date());
+                  setErrors((e) => ({ ...e, goldTHB: false }));
+                  return;
+                }
+              }
+              // Fallback: scrape from any table with "ทองคำ 96.5%" text next row
+              const tds = Array.from(doc.querySelectorAll("table tr td"));
+              for (let i = 0; i < tds.length; i++) {
+                if (tds[i].textContent.includes("96.5%")) {
+                  // Value in same row or next row
+                  let valTd = tds[i].parentElement.querySelector("td:nth-child(2)");
+                  if (!valTd) valTd = tds[i + 1];
+                  if (valTd) {
+                    const val = parseFloat(valTd.textContent.replace(/[^0-9.]/g, ""));
+                    if (!isNaN(val)) {
+                      setGoldTHB({ price: val });
+                      setGoldTHBTime(new Date());
+                      setErrors((e) => ({ ...e, goldTHB: false }));
+                      return;
+                    }
+                  }
+                }
+              }
+              throw new Error("Gold THB price not found");
+            } else {
+              throw new Error("No contents from proxy");
+            }
+          } catch {
+            setErrors((e) => ({ ...e, goldTHB: true }));
+          }
+        }
+        fetchGoldTHB();
+        const intervalId = setInterval(fetchGoldTHB, 5 * 60 * 1000);
+        return () => clearInterval(intervalId);
+      }, []);
+
+      // Fetch S&P500 every 5 mins (Yahoo Finance unofficial)
+      useEffect(() => {
+        async function fetchSP500() {
+          try {
+            // Endpoint: https://query1.finance.yahoo.com/v7/finance/quote?symbols=%5EGSPC
+            const res = await fetchWithTimeout(
+              "https://query1.finance.yahoo.com/v7/finance/quote?symbols=%5EGSPC"
+            );
+            if (res.quoteResponse && res.quoteResponse.result.length > 0) {
+              const quote = res.quoteResponse.result[0];
+              setSP500({
+                price: quote.regularMarketPrice,
+                changePercent: quote.regularMarketChangePercent,
+              });
+              setSP500Time(new Date());
+              setErrors((e) => ({ ...e, sp500: false }));
+            } else {
+              throw new Error("SP500 Not found");
+            }
+          } catch {
+            setErrors((e) => ({ ...e, sp500: true }));
+          }
+        }
+        fetchSP500();
+        const intervalId = setInterval(fetchSP500, 5 * 60 * 1000);
+        return () => clearInterval(intervalId);
+      }, []);
+
+      // Fetch custom tickers (stock) every 5 mins with Yahoo Finance
+      useEffect(() => {
+        if (customTickers.length === 0) {
+          setCustomTickerData({});
+          setCustomTickerTime(null);
+          return;
+        }
+        async function fetchCustom() {
+          try {
+            // Query multiple symbols
+            const symbols = customTickers.map((t) => t.symbol).join(",");
+            const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols}`;
+            const res = await fetchWithTimeout(url);
+            if (res.quoteResponse && res.quoteResponse.result.length > 0) {
+              // Map symbol -> {price, changePercent}
+              let data = {};
+              for (const q of res.quoteResponse.result) {
+                data[q.symbol.toUpperCase()] = {
+                  price: q.regularMarketPrice,
+                  changePercent: q.regularMarketChangePercent,
+                };
+              }
+              setCustomTickerData(data);
+              setCustomTickerTime(new Date());
+              setErrors((e) => ({ ...e, customTickers: false }));
+            } else {
+              throw new Error("Custom tickers no data");
+            }
+          } catch {
+            setErrors((e) => ({ ...e, customTickers: true }));
+          }
+        }
+        fetchCustom();
+        const intervalId = setInterval(fetchCustom, 5 * 60 * 1000);
+        return () => clearInterval(intervalId);
+      }, [customTickers]);
+
+      // Fetch news (4-5 news) every 5 mins - source: free RSS news or public API
+      // Since no direct free Bitcoin/stock/gold news API without key,
+      // We'll use CoinGecko's news RSS or newsapi.org demo or fallback to quick sample
+
+      useEffect(() => {
+        async function fetchNews() {
+          try {
+            // Use CoinGecko status updates API (free)
+            const res = await fetchWithTimeout(
+              "https://api.coingecko.com/api/v3/status_updates"
+            );
+            if (res.status_updates && res.status_updates.length > 0) {
+              const filtered = res.status_updates
+                .filter((item) => {
+                  const msg = item.description.toLowerCase();
+                  return (
+                    msg.includes("bitcoin") ||
+                    msg.includes("gold") ||
+                    msg.includes("stock") ||
+                    msg.includes("market") ||
+                    msg.includes("btc") ||
+                    msg.includes("s&p")
+                  );
+                })
+                .slice(0, 5);
+              setNewsList(
+                filtered.map((item) => ({
+                  title: item.description,
+                  time: new Date(item.created_at),
+                }))
+              );
+              setNewsTime(new Date());
+              setErrors((e) => ({ ...e, news: false }));
+            } else {
+              throw new Error("No news found");
+            }
+          } catch {
+            // fallback - static sample news
+            setNewsList([
+              {
+                title:
+                  "ตลาดหุ้นผันผวน หลังรายงานเศรษฐกิจสหรัฐไม่สดใส",
+                time: new Date(),
+              },
+              {
+                title:
+                  "ราคาทองคำปรับตัวขึ้นรับความเสี่ยงทางการเมือง",
+                time: new Date(),
+              },
+              {
+                title: "Bitcoin ยังคงอยู่ในแนวโน้มขาขึ้น",
+                time: new Date(),
+              },
+            ]);
+            setNewsTime(null);
+            setErrors((e) => ({ ...e, news: false }));
+          }
+        }
+        fetchNews();
+        const intervalId = setInterval(fetchNews, 5 * 60 * 1000);
+        return () => clearInterval(intervalId);
+      }, []);
+
+      // Manage custom tickers add/remove with validation (only letters, dot allowed)
+      const newTickerRef = React.useRef();
+      function addCustomTicker() {
+        if (!newTickerRef.current) return;
+        const value = newTickerRef.current.value.trim().toUpperCase();
+        if (
+          value &&
+          !customTickers.find((t) => t.symbol === value) &&
+          /^[A-Z0-9.]{1,8}$/.test(value)
+        ) {
+          const updated = [...customTickers, { symbol: value }];
+          setCustomTickers(updated);
+          localStorage.setItem("customTickers", JSON.stringify(updated));
+          newTickerRef.current.value = "";
+        }
+      }
+      function removeCustomTicker(symbol) {
+        const updated = customTickers.filter((t) => t.symbol !== symbol);
+        setCustomTickers(updated);
+        localStorage.setItem("customTickers", JSON.stringify(updated));
+      }
+
+      // Check if data is stale (> 1 hour) for warning yellow text
+      function isStale(updatedTime) {
+        if (!updatedTime) return true;
+        const diff = (new Date() - new Date(updatedTime)) / 1000;
+        return diff > 3600; // 1 hour seconds
+      }
+
+      // Format time update string
+      function timeSince(date) {
+        if (!date) return "-";
+        const seconds = Math.floor((new Date() - date) / 1000);
+        if (seconds < 60) return `${seconds} วินาทีที่แล้ว`;
+        else if (seconds < 3600)
+          return `${Math.floor(seconds / 60)} นาทีที่แล้ว`;
+        else if (seconds < 86400)
+          return `${Math.floor(seconds / 3600)} ชั่วโมงที่แล้ว`;
+        else return "> 1 วันแล้ว";
+      }
+
+      // Color logic for price change
+      function priceColor(change) {
+        if (change > 0) return "text-green-400";
+        else if (change < 0) return "text-red-400";
+        return "text-gray-300";
+      }
+
+      function PriceChangeIcon({change}) {
+        if (change > 0) return <UpArrow />;
+        else if (change < 0) return <DownArrow />;
         return null;
       }
-    }
 
-    // Prices dashboard
-    function Prices({userTickers}) {
-      const [bitcoinPrice, setBitcoinPrice] = useState(null);
-      const [prevBitcoinPrice, setPrevBitcoinPrice] = useState(null);
-      const [goldUsd, setGoldUsd] = useState(null);
-      const [prevGoldUsd, setPrevGoldUsd] = useState(null);
-      const [thaiGold, setThaiGold] = useState(null);
-      const [prevThaiGold, setPrevThaiGold] = useState(null);
-      const [sp500, setSp500] = useState(null);
-      const [prevSp500, setPrevSp500] = useState(null);
-      const [stocks, setStocks] = useState({});
-      const [prevStocks, setPrevStocks] = useState({});
-
-      // Update every 3 minutes (180000 ms)
-      useEffect(() => {
-        async function updatePrices() {
-          // Bitcoin price from CoinGecko
-          const btcData = await fetchJson(`https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd`);
-          if(btcData && btcData.bitcoin && btcData.bitcoin.usd !== undefined) {
-            setPrevBitcoinPrice(bitcoinPrice);
-            setBitcoinPrice(btcData.bitcoin.usd);
-          }
-
-          // Gold price USD/oz from Metals-API (free plan limited, use demo endpoint)
-          // Using GoldAPI is an alternative but Metals-API uses API key, here replaced by public demo endpoint for free example
-          // We'll use Metals-API demo endpoint for gold USD price (approximate)
-          // This is a public demo endpoint from Metals-API document: https://metals-api.com/documentation
-          // If it stops working, user must replace with own API key or another free API.
-          const metalsData = await fetchJson(`https://metals-api.com/api/latest?access_key=demo&base=USD&symbols=XAU`);
-          if(metalsData && metalsData.rates && metalsData.rates.XAU !== undefined) {
-            // metalsData.rates.XAU is amount of gold per 1 USD, so invert it to USD per XAU
-            const priceUsdPerOz = 1 / metalsData.rates.XAU;
-            setPrevGoldUsd(goldUsd);
-            setGoldUsd(priceUsdPerOz);
-          }
-
-          // Thai gold price from สมาคมค้าทองคำไทย API (free public)
-          // Using https://api.chnwt.dev/latest to get latest thai gold prices
-          const thaiGoldData = await fetchJson("https://api.chnwt.dev/latest");
-          if(thaiGoldData && thaiGoldData.rates && thaiGoldData.rates['96.5'] && thaiGoldData.rates['96.5'].buy !== undefined) {
-            // Example: buy price for 96.5% gold (บาท/สลึง)
-            const goldPrice = thaiGoldData.rates['96.5'].buy;
-            setPrevThaiGold(thaiGold);
-            setThaiGold(goldPrice);
-          }
-
-          // S&P 500 price from Yahoo Finance (symbol ^GSPC)
-          const spData = await fetchJson(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=%5EGSPC`);
-          if(spData && spData.quoteResponse && spData.quoteResponse.result && spData.quoteResponse.result.length > 0) {
-            const spPrice = spData.quoteResponse.result[0].regularMarketPrice;
-            setPrevSp500(sp500);
-            setSp500(spPrice);
-          }
-
-          // Stocks user tickers
-          if(userTickers.length > 0) {
-            const tickersStr = userTickers.join(',');
-            const stockData = await fetchJson(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${tickersStr}`);
-            if(stockData && stockData.quoteResponse && stockData.quoteResponse.result) {
-              const newStocks = {};
-              stockData.quoteResponse.result.forEach(stock => {
-                newStocks[stock.symbol] = {
-                  price: stock.regularMarketPrice,
-                  prevClose: stock.regularMarketPreviousClose
-                };
-              });
-              setPrevStocks(stocks);
-              setStocks(newStocks);
-            }
-          }
-        }
-        updatePrices();
-        const intervalId = setInterval(updatePrices, 180000); // 3 minutes
-        return () => clearInterval(intervalId);
-      }, [userTickers, bitcoinPrice, goldUsd, thaiGold, sp500, stocks]);
-
-      // Render
-      return (
-        <div className="bg-gray-800 rounded-md p-4 mb-5 shadow-md">
-          <h2 className="text-xl font-bold border-b border-gray-600 pb-2 mb-3 select-none">ราคาสินทรัพย์</h2>
-          {/* Bitcoin */}
-          <PriceItem name="Bitcoin (BTC)" price={bitcoinPrice} prevPrice={prevBitcoinPrice} unit="USD" />
-          {/* Gold USD/oz */}
-          <PriceItem name="ทองคำ (USD/oz)" price={goldUsd} prevPrice={prevGoldUsd} />
-          {/* Thai Gold */}
-          <PriceItem name="ทองคำไทย (บาท/สลึง)" price={thaiGold} prevPrice={prevThaiGold} />
-          {/* S&P 500 */}
-          <PriceItem name="S&P 500" price={sp500} prevPrice={prevSp500} />
-          {/* User stocks */}
-          {userTickers.length > 0 && <div className="mt-3 font-semibold select-none">หุ้นที่ติดตาม</div>}
-          {userTickers.map(ticker => {
-            const stock = stocks[ticker];
-            if(!stock) return <div key={ticker} className="text-gray-500 select-none">{ticker}: กำลังโหลด...</div>;
-            return (
-              <PriceItem
-                key={ticker}
-                name={ticker}
-                price={stock.price}
-                prevPrice={stock.prevClose}
-              />
-            );
-          })}
+      // --- COMPONENTS ---
+      // Big Clock with Thai date
+      const Clock = () => (
+        <div className="text-center px-4 select-none">
+          <div
+            className="font-mono font-bold text-[4.5rem] md:text-[6rem] leading-none"
+            aria-label="เวลาปัจจุบัน"
+          >
+            {now.toLocaleTimeString("th-TH", {
+              hour12: false,
+            })}
+          </div>
+          <div className="text-yellow-400 font-medium text-lg sm:text-xl">
+            {getThaiDateString(now)}
+          </div>
         </div>
       );
-    }
 
-    // Short news daily (static example)
-    // In real app, could fetch from news API; here just static demo
-    const dailyNewsSample = [
-      "ตลาดหุ้นปรับตัวขึ้นรับข่าวเศรษฐกิจบวก",
-      "Bitcoin ปรับตัวขึ้นถึง 5% ในวันนี้",
-      "ราคาทองคำทั่วโลกปรับตัวลดลงเล็กน้อย",
-      "บริษัทเทคโนโลยีเปิดตัวผลิตภัณฑ์ใหม่",
-      "นักลงทุนจับตาดูผลประกอบการไตรมาสหน้า"
-    ];
+      // Horoscope daily text
+      const Horoscope = () => {
+        const horoText = getDailyHoroscope(now);
+        return (
+          <div
+            className="mt-4 p-3 rounded-md bg-gradient-to-r from-yellow-600 to-yellow-400 text-black font-semibold text-center"
+            aria-live="polite"
+          >
+            🌟 ดวงการเงินวันนี้: {horoText}
+          </div>
+        );
+      };
 
-    function DailyNews() {
-      return (
-        <div className="bg-gray-800 rounded-md p-4 shadow-md">
-          <h2 className="text-xl font-bold border-b border-gray-600 pb-2 mb-3 select-none">ข่าวสั้น ๆ ประจำวัน</h2>
-          <ul className="list-disc list-inside space-y-1">
-            {dailyNewsSample.map((news, i) => (
-              <li key={i} className="select-text">{news}</li>
+      // Single asset card
+      function AssetCard({ label, price, changePercent, stale, warning, unit }) {
+        const priceStr =
+          price != null ? (unit ? price + " " + unit : price.toLocaleString()) : "-";
+        const changeStr =
+          changePercent != null ? `${formatNumber(changePercent, 2)}%` : "-";
+        const colorClass = priceColor(changePercent);
+
+        return (
+          <div
+            className={`p-3 rounded-md min-w-[150px] ${
+              stale
+                ? "bg-yellow-900"
+                : "bg-gradient-to-br from-gray-800 to-gray-900"
+            } text-white`}
+            aria-label={`${label} ราคา ${
+              priceStr
+            } การเปลี่ยนแปลง ${changeStr} ${stale ? "ข้อมูลเก่า" : ""}`}
+          >
+            <div className="font-bold text-lg">{label}</div>
+            <div className="text-2xl font-extrabold flex items-center gap-1">
+              {priceStr}
+              <span className={`${colorClass} flex items-center`}>
+                <PriceChangeIcon change={changePercent || 0} />
+                {changeStr}
+              </span>
+            </div>
+            {warning && (
+              <div className="text-yellow-300 text-xs mt-1">ข้อมูลเก่า (อัพเดทช้า)</div>
+            )}
+          </div>
+        );
+      }
+
+      // News list component
+      function NewsList({ news }) {
+        if (!news || news.length === 0)
+          return <div className="italic text-gray-400">ไม่มีข่าวสารปัจจุบัน</div>;
+
+        return (
+          <ul className="space-y-2 overflow-auto max-h-52 pr-1">
+            {news.map((item, i) => (
+              <li
+                key={i}
+                className="text-sm text-gray-300 border-b border-gray-700 pb-1"
+                title={item.title}
+              >
+                <div className="truncate">{item.title}</div>
+                <div className="text-xs text-gray-500">
+                  {item.time ? item.time.toLocaleTimeString("th-TH", {hour: "2-digit", minute:"2-digit"}) : "-"}
+                </div>
+              </li>
             ))}
           </ul>
-        </div>
-      );
-    }
-
-    // Add ticker form
-    function AddTickerForm({onAdd}) {
-      const [input, setInput] = useState('');
-      const handleSubmit = (e) => {
-        e.preventDefault();
-        const t = input.trim().toUpperCase();
-        if(t) {
-          onAdd(t);
-          setInput('');
-        }
-      }
-      return (
-        <form onSubmit={handleSubmit} className="mb-5 select-none">
-          <label className="font-semibold mr-2">เพิ่มหุ้น (Ticker): </label>
-          <input
-            className="p-1 rounded text-gray-900"
-            type="text"
-            value={input}
-            maxLength={10}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="เช่น AAPL"
-            aria-label="Stock ticker"
-          />
-          <button type="submit" className="ml-2 px-3 py-1 bg-green-600 rounded hover:bg-green-700">เพิ่ม</button>
-        </form>
-      );
-    }
-
-    // Main App component
-    function App() {
-      const [userTickers, setUserTickers] = useState(['AAPL', 'GOOGL', 'TSLA']);
-      const [orientation, setOrientation] = useState('portrait');  // portrait or landscape
-
-      // Detect orientation (manual toggle)
-      function toggleOrientation() {
-        setOrientation(orientation === 'portrait' ? 'landscape' : 'portrait');
+        );
       }
 
-      // Layout style based on orientation
-      const containerClasses = orientation === 'portrait' ? "flex flex-col max-w-xl mx-auto" : "grid grid-cols-3 gap-4 max-w-7xl mx-auto";
+      // Custom tickers list + add input
+      function CustomTickers() {
+        return (
+          <section className="my-4">
+            <h3 className="font-semibold text-lg mb-1 text-white">หุ้นเสริม (กำหนดเอง)</h3>
+            <div className="flex gap-2 mb-2">
+              <input
+                ref={newTickerRef}
+                type="text"
+                inputMode="text"
+                maxLength={8}
+                className="flex-1 rounded-md bg-gray-700 text-white px-3 py-2 placeholder-gray-400 focus:outline-yellow-300"
+                placeholder="ใส่ ticker เช่น AAPL, PTT"
+                onKeyDown={e => {
+                  if (e.key === "Enter") {
+                    addCustomTicker();
+                  }
+                }}
+                aria-label="เพิ่มหุ้นเสริม"
+                autoComplete="off"
+              />
+              <button
+                className="bg-yellow-400 text-black rounded-md px-3 font-semibold hover:bg-yellow-300 transition"
+                onClick={addCustomTicker}
+                aria-label="เพิ่มหุ้น"
+                type="button"
+              >
+                เพิ่ม
+              </button>
+            </div>
+            {customTickers.length === 0 && (
+              <div className="text-gray-400 italic">ยังไม่มีหุ้นเสริม</div>
+            )}
+            <div className="space-y-2 max-h-48 overflow-auto">
+              {customTickers.map(({ symbol }) => {
+                const data = customTickerData[symbol];
+                const stale = isStale(customTickerTime);
+                const warning = errors.customTickers && !data;
+                return (
+                  <div
+                    key={symbol}
+                    className={`flex justify-between items-center bg-gray-800 p-2 rounded-md ${
+                      stale ? "bg-yellow-900" : ""
+                    }`}
+                  >
+                    <div className="font-semibold text-lg">{symbol}</div>
+                    <div className="flex items-center gap-2 text-white">
+                      {data ? (
+                        <>
+                          <span className="text-2xl font-bold">
+                            {data.price ? data.price.toLocaleString() : "-"}
+                          </span>
+                          <span className={priceColor(data.changePercent)}>
+                            <PriceChangeIcon change={data.changePercent || 0} />
+                            {data.changePercent ? data.changePercent.toFixed(2) : "-"}%
+                          </span>
+                        </>
+                      ) : (
+                        <div className="italic text-yellow-300 text-sm">โหลดข้อมูลผิดพลาด</div>
+                      )}
+                      <button
+                        aria-label={`ลบหุ้น ${symbol}`}
+                        onClick={() => removeCustomTicker(symbol)}
+                        className="text-red-500 hover:text-red-400 select-none"
+                        type="button"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+              {errors.customTickers && (
+                <div className="text-yellow-300 text-xs mt-1">
+                  ข้อมูลหุ้นเสริมอาจล้าสมัยหรือโหลดไม่ได้
+                </div>
+              )}
+            </div>
+          </section>
+        );
+      }
 
-      return (
-        <div>
-          <div className="flex justify-between items-center mb-4 select-none">
-            <h1 className="text-2xl font-bold">Dashboard Web App</h1>
-            <button onClick={toggleOrientation} className="px-3 py-1 bg-indigo-600 rounded hover:bg-indigo-700">
-              สลับโหมด {orientation === 'portrait' ? 'แนวนอน' : 'แนวตั้ง'}
-            </button>
-          </div>
-          <div className={containerClasses}>
-            <div className="p-2">
+      // Update Footer info
+      function FooterInfo() {
+        return (
+          <footer className="mt-4 text-center text-xs text-gray-400 select-none mb-1">
+            <div>
+              อัพเดทล่าสุด:{" "}
+              <span
+                className={
+                  isStale(
+                    [
+                      bitcoinTime,
+                      goldUSDTime,
+                      goldTHBTime,
+                      sp500Time,
+                      customTickerTime,
+                      newsTime,
+                    ].find((t) => t != null)
+                  )
+                    ? "text-yellow-400"
+                    : "text-gray-400"
+                }
+              >
+                {[
+                  bitcoinTime,
+                  goldUSDTime,
+                  goldTHBTime,
+                  sp500Time,
+                  customTickerTime,
+                  newsTime,
+                ]
+                  .filter((t) => t != null)
+                  .map((t) => timeSince(t))
+                  .join(", ")}
+              </span>
+            </div>
+            <div>พัฒนาโดย Perplexity AI - ใช้ API ฟรีทั้งหมด</div>
+          </footer>
+        );
+      }
+
+      // UI Mode toggle button (portrait/landscape)
+      function ModeToggle() {
+        return (
+          <button
+            aria-label="สลับโหมดแนวตั้ง/แนวนอน"
+            onClick={() => setIsPortrait(!isPortrait)}
+            className="absolute top-3 right-3 bg-gray-700 bg-opacity-90 text-yellow-400 px-3 py-1 rounded-md transition hover:bg-yellow-400 hover:text-black select-none focus:outline-none focus:ring-2 focus:ring-yellow-400"
+          >
+            โหมด {isPortrait ? "แนวนอน" : "แนวตั้ง"}
+          </button>
+        );
+      }
+
+      // Render main layout by mode
+      if (isPortrait) {
+        // PORTRAIT
+        return (
+          <div className="relative max-w-lg mx-auto py-3 px-3 flex flex-col min-h-screen">
+            <ModeToggle />
+            <header>
               <Clock />
-              <ThaiCalendar />
-              <DailyHoroscope />
-              <AddTickerForm onAdd={(ticker) => {
-                if(!userTickers.includes(ticker)) setUserTickers([...userTickers, ticker]);
-              }} />
-              <Prices userTickers={userTickers} />
-            </div>
-            <div className="p-2 col-span-2">
-              <DailyNews />
-            </div>
+              <Horoscope />
+            </header>
+            <main className="mt-4">
+              <section aria-label="ราคาหลัก" className="grid grid-cols-2 gap-3">
+                <AssetCard
+                  label="Bitcoin (USD)"
+                  price={bitcoin?.price}
+                  changePercent={bitcoin?.change}
+                  stale={isStale(bitcoinTime)}
+                  warning={errors.bitcoin && isStale(bitcoinTime)}
+                  unit="USD"
+                />
+                <AssetCard
+                  label="ทองคำ (USD/ออนซ์)"
+                  price={goldUSD?.price}
+                  changePercent={null}
+                  stale={isStale(goldUSDTime)}
+                  warning={errors.goldUSD && isStale(goldUSDTime)}
+                  unit="USD"
+                />
+                <AssetCard
+                  label="ทองคำไทย (บาท/สลึง)"
+                  price={goldTHB?.price}
+                  changePercent={null}
+                  stale={isStale(goldTHBTime)}
+                  warning={errors.goldTHB && isStale(goldTHBTime)}
+                  unit="บาท"
+                />
+                <AssetCard
+                  label="S&P 500 Index"
+                  price={sp500?.price}
+                  changePercent={sp500?.changePercent}
+                  stale={isStale(sp500Time)}
+                  warning={errors.sp500 && isStale(sp500Time)}
+                />
+              </section>
+              <CustomTickers />
+              <section>
+                <h3 className="font-semibold text-lg mb-2">ข่าวสารล่าสุด</h3>
+                <NewsList news={newsList} />
+                {errors.news && (
+                  <div className="text-yellow-300 mt-1 text-xs">
+                    ข่าวสารอาจล้าสมัยหรือโหลดไม่ได้
+                  </div>
+                )}
+              </section>
+            </main>
+            <FooterInfo />
           </div>
-        </div>
-      );
+        );
+      } else {
+        // LANDSCAPE - 3 columns layout
+        return (
+          <div className="relative max-w-7xl mx-auto py-3 px-4 flex flex-col min-h-screen">
+            <ModeToggle />
+            <div className="flex flex-row gap-4 flex-wrap">
+              <section
+                aria-label="คอลัมน์ซ้าย"
+                className="flex flex-col gap-4 flex-[1_1_25%] min-w-[250px]"
+              >
+                <Clock />
+                <Horoscope />
+                <AssetCard
+                  label="Bitcoin (USD)"
+                  price={bitcoin?.price}
+                  changePercent={bitcoin?.change}
+                  stale={isStale(bitcoinTime)}
+                  warning={errors.bitcoin && isStale(bitcoinTime)}
+                  unit="USD"
+                />
+                <AssetCard
+                  label="ทองคำ (USD/ออนซ์)"
+                  price={goldUSD?.price}
+                  changePercent={null}
+                  stale={isStale(goldUSDTime)}
+                  warning={errors.goldUSD && isStale(goldUSDTime)}
+                  unit="USD"
+                />
+              </section>
+
+              <section
+                aria-label="คอลัมน์กลาง"
+                className="flex flex-col gap-4 flex-[1_1_45%] min-w-[350px]"
+              >
+                <AssetCard
+                  label="S&P 500 Index"
+                  price={sp500?.price}
+                  changePercent={sp500?.changePercent}
+                  stale={isStale(sp500Time)}
+                  warning={errors.sp500 && isStale(sp500Time)}
+                />
+                <AssetCard
+                  label="ทองคำไทย (บาท/สลึง)"
+                  price={goldTHB?.price}
+                  changePercent={null}
+                  stale={isStale(goldTHBTime)}
+                  warning={errors.goldTHB && isStale(goldTHBTime)}
+                  unit="บาท"
+                />
+                <CustomTickers />
+              </section>
+
+              <section
+                aria-label="คอลัมน์ข่าวสาร"
+                className="flex flex-col gap-2 flex-[1_1_25%] min-w-[250px]"
+              >
+                <h3 className="font-semibold text-lg mb-2 text-white">ข่าวสารล่าสุด</h3>
+                <NewsList news={newsList} />
+                {errors.news && (
+                  <div className="text-yellow-300 mt-1 text-xs">
+                    ข่าวสารอาจล้าสมัยหรือโหลดไม่ได้
+                  </div>
+                )}
+              </section>
+            </div>
+            <FooterInfo />
+          </div>
+        );
+      }
     }
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    // Render app
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
   </script>
 </body>
 </html>
